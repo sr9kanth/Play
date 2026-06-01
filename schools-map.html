@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Victoria Top Schools Map</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; display: flex; height: 100vh; overflow: hidden; }
+
+    #sidebar {
+      width: 340px;
+      min-width: 260px;
+      background: #fff;
+      border-right: 1px solid #e0e0e0;
+      display: flex;
+      flex-direction: column;
+      z-index: 1000;
+      box-shadow: 2px 0 8px rgba(0,0,0,0.08);
+    }
+
+    #sidebar-header {
+      padding: 18px 16px 12px;
+      background: linear-gradient(135deg, #1a237e 0%, #283593 100%);
+      color: white;
+    }
+    #sidebar-header h1 { font-size: 17px; font-weight: 700; margin-bottom: 3px; }
+    #sidebar-header p { font-size: 12px; opacity: 0.8; }
+
+    #search-box {
+      padding: 10px 12px;
+      border-bottom: 1px solid #eee;
+    }
+    #search-box input {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid #ddd;
+      border-radius: 20px;
+      font-size: 13px;
+      outline: none;
+    }
+    #search-box input:focus { border-color: #3949ab; }
+
+    #filters {
+      padding: 10px 12px;
+      border-bottom: 1px solid #eee;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .filter-btn {
+      padding: 4px 10px;
+      border-radius: 12px;
+      border: 1.5px solid #ccc;
+      background: white;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.15s;
+      color: #555;
+    }
+    .filter-btn.active { color: white; border-color: transparent; }
+    .filter-btn[data-filter="all"].active { background: #546e7a; }
+    .filter-btn[data-filter="secondary"].active { background: #e53935; }
+    .filter-btn[data-filter="primary"].active { background: #43a047; }
+    .filter-btn[data-filter="government"].active { background: #1e88e5; }
+    .filter-btn[data-filter="non-government"].active { background: #8e24aa; }
+
+    #school-list {
+      overflow-y: auto;
+      flex: 1;
+    }
+
+    .school-item {
+      padding: 10px 14px;
+      border-bottom: 1px solid #f0f0f0;
+      cursor: pointer;
+      transition: background 0.12s;
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+    }
+    .school-item:hover { background: #f5f5f5; }
+    .school-item.highlighted { background: #e8eaf6; }
+
+    .school-rank {
+      font-size: 11px;
+      font-weight: 700;
+      color: white;
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+    .school-item.secondary .school-rank { background: #e53935; }
+    .school-item.primary .school-rank { background: #43a047; }
+
+    .school-info { flex: 1; min-width: 0; }
+    .school-name { font-size: 13px; font-weight: 600; color: #1a237e; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .school-meta { font-size: 11px; color: #777; margin-top: 2px; }
+    .school-score {
+      font-size: 13px;
+      font-weight: 700;
+      color: #333;
+      flex-shrink: 0;
+      text-align: right;
+    }
+    .school-score span { display: block; font-size: 10px; font-weight: 400; color: #999; }
+
+    #stats-bar {
+      padding: 8px 14px;
+      background: #f5f5f5;
+      border-top: 1px solid #e0e0e0;
+      font-size: 12px;
+      color: #666;
+    }
+
+    #map { flex: 1; }
+
+    .custom-popup .leaflet-popup-content-wrapper {
+      border-radius: 10px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+      padding: 0;
+      overflow: hidden;
+    }
+    .custom-popup .leaflet-popup-content { margin: 0; width: 240px !important; }
+
+    .popup-header {
+      padding: 12px 14px 10px;
+      color: white;
+    }
+    .popup-header.secondary { background: linear-gradient(135deg, #c62828, #e53935); }
+    .popup-header.primary { background: linear-gradient(135deg, #2e7d32, #43a047); }
+    .popup-header .popup-rank { font-size: 11px; opacity: 0.85; margin-bottom: 2px; }
+    .popup-header .popup-name { font-size: 14px; font-weight: 700; line-height: 1.3; }
+    .popup-header .popup-level { font-size: 11px; opacity: 0.85; margin-top: 3px; }
+
+    .popup-body { padding: 10px 14px 12px; }
+    .popup-row { display: flex; justify-content: space-between; padding: 3px 0; font-size: 12px; }
+    .popup-row .label { color: #888; }
+    .popup-row .value { font-weight: 600; color: #333; }
+
+    .legend {
+      position: absolute;
+      bottom: 30px;
+      right: 10px;
+      background: white;
+      padding: 10px 14px;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+      z-index: 1000;
+      font-size: 12px;
+    }
+    .legend-title { font-weight: 700; margin-bottom: 6px; color: #333; }
+    .legend-item { display: flex; align-items: center; gap: 7px; margin: 3px 0; color: #555; }
+    .legend-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+
+    @media (max-width: 640px) {
+      body { flex-direction: column; }
+      #sidebar { width: 100%; height: 45vh; border-right: none; border-bottom: 1px solid #e0e0e0; }
+      #map { height: 55vh; }
+    }
+  </style>
+</head>
+<body>
+
+<div id="sidebar">
+  <div id="sidebar-header">
+    <h1>Victoria Top Schools 2025</h1>
+    <p>Source: BetterEducation.com.au</p>
+  </div>
+  <div id="search-box">
+    <input type="text" id="search" placeholder="Search schools or suburbs…" />
+  </div>
+  <div id="filters">
+    <button class="filter-btn active" data-filter="all">All</button>
+    <button class="filter-btn" data-filter="secondary">Secondary</button>
+    <button class="filter-btn" data-filter="primary">Primary</button>
+    <button class="filter-btn" data-filter="government">Government</button>
+    <button class="filter-btn" data-filter="non-government">Non-Govt</button>
+  </div>
+  <div id="school-list"></div>
+  <div id="stats-bar">Showing <span id="count">0</span> schools</div>
+</div>
+
+<div id="map"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const SCHOOLS = [
+  // ── SECONDARY ──────────────────────────────────────────────────────────────
+  { rank:1,  name:"Lighthouse Christian College",    suburb:"Keysborough",      postcode:"3173", score:97,  sector:"Non-Government", level:"Secondary", lat:-38.0060, lng:145.1730 },
+  { rank:2,  name:"Melbourne High School",            suburb:"South Yarra",      postcode:"3141", score:100, sector:"Government",     level:"Secondary", lat:-37.8389, lng:144.9934 },
+  { rank:3,  name:"Mac.Robertson Girls' High School", suburb:"St Kilda East",    postcode:"3183", score:100, sector:"Government",     level:"Secondary", lat:-37.8674, lng:144.9829 },
+  { rank:4,  name:"Nossal High School",               suburb:"Berwick",          postcode:"3806", score:100, sector:"Government",     level:"Secondary", lat:-38.0364, lng:145.3522 },
+  { rank:5,  name:"Suzanne Cory High School",         suburb:"Werribee",         postcode:"3030", score:100, sector:"Government",     level:"Secondary", lat:-37.9026, lng:144.6617 },
+  { rank:6,  name:"Ballarat Clarendon College",       suburb:"Ballarat",         postcode:"3350", score:100, sector:"Non-Government", level:"Secondary", lat:-37.5622, lng:143.8503 },
+  { rank:7,  name:"Presbyterian Ladies' College",     suburb:"Burwood",          postcode:"3125", score:100, sector:"Non-Government", level:"Secondary", lat:-37.8551, lng:145.1038 },
+  { rank:8,  name:"Huntingtower School",              suburb:"Mount Waverley",   postcode:"3149", score:100, sector:"Non-Government", level:"Secondary", lat:-37.8785, lng:145.1291 },
+  { rank:9,  name:"Camberwell Grammar School",        suburb:"Canterbury",       postcode:"3126", score:99,  sector:"Non-Government", level:"Secondary", lat:-37.8261, lng:145.0694 },
+  { rank:10, name:"Haileybury College",               suburb:"Keysborough",      postcode:"3173", score:99,  sector:"Non-Government", level:"Secondary", lat:-38.0020, lng:145.1780 },
+  { rank:11, name:"Fintona Girls' School",            suburb:"Balwyn",           postcode:"3103", score:99,  sector:"Non-Government", level:"Secondary", lat:-37.8139, lng:145.0840 },
+  { rank:12, name:"Lighthouse Christian College",     suburb:"Cranbourne",       postcode:"3977", score:99,  sector:"Non-Government", level:"Secondary", lat:-38.1124, lng:145.2837 },
+  { rank:13, name:"Melbourne Grammar School",         suburb:"St Kilda Road",    postcode:"3004", score:99,  sector:"Non-Government", level:"Secondary", lat:-37.8420, lng:144.9720 },
+  { rank:14, name:"Camberwell Girls Grammar School",  suburb:"Canterbury",       postcode:"3126", score:99,  sector:"Non-Government", level:"Secondary", lat:-37.8280, lng:145.0710 },
+  { rank:15, name:"St Andrews Christian College",     suburb:"Wantirna South",   postcode:"3152", score:99,  sector:"Non-Government", level:"Secondary", lat:-37.8581, lng:145.2284 },
+  { rank:16, name:"Korowa Anglican Girls' School",    suburb:"Glen Iris",        postcode:"3146", score:99,  sector:"Non-Government", level:"Secondary", lat:-37.8636, lng:145.0465 },
+  { rank:17, name:"Lauriston Girls' School",          suburb:"Armadale",         postcode:"3143", score:99,  sector:"Non-Government", level:"Secondary", lat:-37.8558, lng:145.0226 },
+  { rank:18, name:"Trinity Grammar School",           suburb:"Kew",              postcode:"3101", score:99,  sector:"Non-Government", level:"Secondary", lat:-37.8107, lng:145.0338 },
+  { rank:19, name:"Scotch College",                   suburb:"Hawthorn",         postcode:"3122", score:99,  sector:"Non-Government", level:"Secondary", lat:-37.8204, lng:145.0610 },
+  { rank:20, name:"St Catherine's School",            suburb:"Toorak",           postcode:"3142", score:99,  sector:"Non-Government", level:"Secondary", lat:-37.8442, lng:145.0128 },
+  { rank:21, name:"Genazzano FCJ College",            suburb:"Kew",              postcode:"3101", score:99,  sector:"Non-Government", level:"Secondary", lat:-37.8095, lng:145.0400 },
+  { rank:22, name:"Xavier College",                   suburb:"Kew",              postcode:"3101", score:99,  sector:"Non-Government", level:"Secondary", lat:-37.8060, lng:145.0370 },
+  { rank:23, name:"Ruyton Girls' School",             suburb:"Kew",              postcode:"3101", score:99,  sector:"Non-Government", level:"Secondary", lat:-37.8085, lng:145.0350 },
+  { rank:24, name:"Mentone Girls' Grammar School",    suburb:"Mentone",          postcode:"3194", score:98,  sector:"Non-Government", level:"Secondary", lat:-38.0037, lng:145.0631 },
+  { rank:25, name:"Firbank Grammar School",           suburb:"Brighton",         postcode:"3186", score:98,  sector:"Non-Government", level:"Secondary", lat:-37.9190, lng:145.0033 },
+  { rank:26, name:"Peninsula Grammar",                suburb:"Mount Eliza",      postcode:"3930", score:98,  sector:"Non-Government", level:"Secondary", lat:-38.1942, lng:145.0857 },
+  { rank:27, name:"Geelong Grammar School",           suburb:"Corio",            postcode:"3214", score:98,  sector:"Non-Government", level:"Secondary", lat:-38.0701, lng:144.3632 },
+  { rank:28, name:"Tintern Grammar",                  suburb:"Ringwood East",    postcode:"3135", score:98,  sector:"Non-Government", level:"Secondary", lat:-37.8200, lng:145.2550 },
+  { rank:29, name:"Caulfield Grammar School",         suburb:"Caulfield",        postcode:"3161", score:98,  sector:"Non-Government", level:"Secondary", lat:-37.8790, lng:145.0210 },
+  { rank:30, name:"St Kevin's College",               suburb:"Toorak",           postcode:"3142", score:98,  sector:"Non-Government", level:"Secondary", lat:-37.8410, lng:145.0100 },
+
+  // ── PRIMARY ────────────────────────────────────────────────────────────────
+  { rank:1,  name:"Fintona Girls' School",            suburb:"Balwyn",           postcode:"3103", score:100, sector:"Non-Government", level:"Primary", lat:-37.8160, lng:145.0860 },
+  { rank:2,  name:"Haileybury College",               suburb:"Wheelers Hill",    postcode:"3173", score:100, sector:"Non-Government", level:"Primary", lat:-37.9027, lng:145.1897 },
+  { rank:3,  name:"Ballarat Clarendon College",       suburb:"Ballarat",         postcode:"3350", score:100, sector:"Non-Government", level:"Primary", lat:-37.5660, lng:143.8540 },
+  { rank:4,  name:"St Andrews Christian College",     suburb:"Wantirna South",   postcode:"3152", score:100, sector:"Non-Government", level:"Primary", lat:-37.8600, lng:145.2300 },
+  { rank:5,  name:"Camberwell Grammar School",        suburb:"Canterbury",       postcode:"3126", score:100, sector:"Non-Government", level:"Primary", lat:-37.8240, lng:145.0720 },
+  { rank:6,  name:"Wheelers Hill Primary School",     suburb:"Wheelers Hill",    postcode:"3150", score:100, sector:"Government",     level:"Primary", lat:-37.9000, lng:145.1870 },
+  { rank:7,  name:"Oakleigh South Primary School",    suburb:"Oakleigh South",   postcode:"3167", score:100, sector:"Government",     level:"Primary", lat:-37.9200, lng:145.0920 },
+  { rank:8,  name:"Presbyterian Ladies' College",     suburb:"Burwood",          postcode:"3125", score:100, sector:"Non-Government", level:"Primary", lat:-37.8530, lng:145.1010 },
+  { rank:9,  name:"Beverley Hills Primary School",    suburb:"Doncaster East",   postcode:"3109", score:100, sector:"Government",     level:"Primary", lat:-37.7813, lng:145.1474 },
+  { rank:10, name:"Serpell Primary School",           suburb:"Templestowe",      postcode:"3106", score:100, sector:"Government",     level:"Primary", lat:-37.7578, lng:145.1494 },
+  { rank:11, name:"St Christopher's School",          suburb:"Glen Waverley",    postcode:"3150", score:100, sector:"Non-Government", level:"Primary", lat:-37.8793, lng:145.1606 },
+  { rank:12, name:"South Melbourne Primary School",   suburb:"Southbank",        postcode:"3006", score:100, sector:"Government",     level:"Primary", lat:-37.8224, lng:144.9646 },
+  { rank:13, name:"Camberwell Girls Grammar School",  suburb:"Canterbury",       postcode:"3126", score:100, sector:"Non-Government", level:"Primary", lat:-37.8260, lng:145.0700 },
+  { rank:14, name:"Kilvington Grammar School",        suburb:"Ormond",           postcode:"3204", score:100, sector:"Non-Government", level:"Primary", lat:-37.9158, lng:145.0363 },
+  { rank:15, name:"Huntingtower School",              suburb:"Mount Waverley",   postcode:"3149", score:100, sector:"Non-Government", level:"Primary", lat:-37.8800, lng:145.1310 },
+  { rank:16, name:"Lighthouse Christian College",     suburb:"Cranbourne",       postcode:"3977", score:100, sector:"Non-Government", level:"Primary", lat:-38.1160, lng:145.2860 },
+  { rank:17, name:"Korowa Anglican Girls' School",    suburb:"Glen Iris",        postcode:"3146", score:100, sector:"Non-Government", level:"Primary", lat:-37.8660, lng:145.0480 },
+  { rank:18, name:"Toorak College",                   suburb:"Mount Eliza",      postcode:"3930", score:100, sector:"Non-Government", level:"Primary", lat:-38.1980, lng:145.0900 },
+  { rank:19, name:"Scotch College",                   suburb:"Hawthorn",         postcode:"3122", score:100, sector:"Non-Government", level:"Primary", lat:-37.8220, lng:145.0630 },
+  { rank:20, name:"Brighton Grammar School",          suburb:"Brighton",         postcode:"3186", score:100, sector:"Non-Government", level:"Primary", lat:-37.9140, lng:145.0010 },
+  { rank:21, name:"Ruyton Girls' School",             suburb:"Kew",              postcode:"3101", score:100, sector:"Non-Government", level:"Primary", lat:-37.8090, lng:145.0360 },
+  { rank:22, name:"Donvale Christian College",        suburb:"Donvale",          postcode:"3111", score:99,  sector:"Non-Government", level:"Primary", lat:-37.7900, lng:145.1880 },
+  { rank:23, name:"Doncaster Primary School",         suburb:"Doncaster",        postcode:"3108", score:99,  sector:"Government",     level:"Primary", lat:-37.7874, lng:145.1244 },
+  { rank:24, name:"Vermont Primary School",           suburb:"Vermont",          postcode:"3133", score:99,  sector:"Government",     level:"Primary", lat:-37.8445, lng:145.1895 },
+  { rank:25, name:"Glen Waverley Primary School",     suburb:"Glen Waverley",    postcode:"3150", score:99,  sector:"Government",     level:"Primary", lat:-37.8773, lng:145.1601 },
+];
+
+// Map init
+const map = L.map('map').setView([-37.8136, 144.9631], 10);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '© <a href="https://openstreetmap.org">OpenStreetMap</a> contributors',
+  maxZoom: 19
+}).addTo(map);
+
+// Marker colors
+function markerColor(school) {
+  if (school.level === 'Secondary') return school.sector === 'Government' ? '#1e88e5' : '#e53935';
+  return school.sector === 'Government' ? '#43a047' : '#8e24aa';
+}
+
+function createIcon(school) {
+  const color = markerColor(school);
+  const size = school.rank <= 5 ? 18 : school.rank <= 15 ? 15 : 12;
+  return L.divIcon({
+    className: '',
+    html: `<div style="
+      width:${size}px;height:${size}px;border-radius:50%;
+      background:${color};border:2px solid white;
+      box-shadow:0 1px 4px rgba(0,0,0,0.4);
+      display:flex;align-items:center;justify-content:center;
+      font-size:${size > 14 ? 8 : 0}px;font-weight:700;color:white;
+    ">${school.rank <= 10 ? school.rank : ''}</div>`,
+    iconSize: [size, size],
+    iconAnchor: [size/2, size/2],
+    popupAnchor: [0, -size/2]
+  });
+}
+
+// Build markers
+let markers = [];
+let listItems = [];
+
+SCHOOLS.forEach((school, idx) => {
+  const marker = L.marker([school.lat, school.lng], { icon: createIcon(school) });
+
+  const levelClass = school.level.toLowerCase();
+  const sectorLabel = school.sector === 'Government' ? 'Government' : 'Non-Government';
+
+  marker.bindPopup(`
+    <div>
+      <div class="popup-header ${levelClass}">
+        <div class="popup-rank">#${school.rank} ${school.level}</div>
+        <div class="popup-name">${school.name}</div>
+        <div class="popup-level">${school.suburb} ${school.postcode}</div>
+      </div>
+      <div class="popup-body">
+        <div class="popup-row"><span class="label">Score</span><span class="value">${school.score}/100</span></div>
+        <div class="popup-row"><span class="label">Sector</span><span class="value">${sectorLabel}</span></div>
+        <div class="popup-row"><span class="label">Level</span><span class="value">${school.level} School</span></div>
+      </div>
+    </div>
+  `, { className: 'custom-popup', maxWidth: 260 });
+
+  markers.push({ school, marker });
+});
+
+// Legend
+const legend = L.control({ position: 'bottomright' });
+legend.onAdd = () => {
+  const div = L.DomUtil.create('div', 'legend');
+  div.innerHTML = `
+    <div class="legend-title">Legend</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#e53935"></div> Secondary Non-Govt</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#1e88e5"></div> Secondary Government</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#8e24aa"></div> Primary Non-Govt</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#43a047"></div> Primary Government</div>
+  `;
+  return div;
+};
+legend.addTo(map);
+
+// Sidebar list
+const listEl = document.getElementById('school-list');
+const countEl = document.getElementById('count');
+
+let activeFilter = 'all';
+let searchQuery = '';
+let activeMarker = null;
+
+function matchesFilter(school) {
+  if (activeFilter === 'secondary') return school.level === 'Secondary';
+  if (activeFilter === 'primary') return school.level === 'Primary';
+  if (activeFilter === 'government') return school.sector === 'Government';
+  if (activeFilter === 'non-government') return school.sector === 'Non-Government';
+  return true;
+}
+
+function matchesSearch(school) {
+  if (!searchQuery) return true;
+  const q = searchQuery.toLowerCase();
+  return school.name.toLowerCase().includes(q) || school.suburb.toLowerCase().includes(q) || school.postcode.includes(q);
+}
+
+function render() {
+  listEl.innerHTML = '';
+  let count = 0;
+
+  markers.forEach(({ school, marker }) => {
+    const show = matchesFilter(school) && matchesSearch(school);
+    if (show) {
+      marker.addTo(map);
+      count++;
+
+      const item = document.createElement('div');
+      item.className = `school-item ${school.level.toLowerCase()}`;
+      item.dataset.idx = markers.indexOf(arguments[0]);
+      item.innerHTML = `
+        <div class="school-rank">${school.rank}</div>
+        <div class="school-info">
+          <div class="school-name">${school.name}</div>
+          <div class="school-meta">${school.suburb} · ${school.level} · ${school.sector}</div>
+        </div>
+        <div class="school-score">${school.score}<span>score</span></div>
+      `;
+      item.addEventListener('click', () => {
+        document.querySelectorAll('.school-item').forEach(el => el.classList.remove('highlighted'));
+        item.classList.add('highlighted');
+        map.setView([school.lat, school.lng], 14);
+        marker.openPopup();
+      });
+      listEl.appendChild(item);
+    } else {
+      marker.remove();
+    }
+  });
+
+  countEl.textContent = count;
+}
+
+// Filter buttons
+document.querySelectorAll('.filter-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    activeFilter = btn.dataset.filter;
+    render();
+  });
+});
+
+// Search
+document.getElementById('search').addEventListener('input', e => {
+  searchQuery = e.target.value;
+  render();
+});
+
+render();
+</script>
+</body>
+</html>
